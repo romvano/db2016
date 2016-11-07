@@ -1,5 +1,7 @@
 from flask import Blueprint, request, g, jsonify
 import MySQLdb as db
+from itertools import chain
+import bisect
 
 User = Blueprint('user', __name__)
 
@@ -13,35 +15,25 @@ def get_get_data(request):
 
 def select(query):
     g.cursor.execute(query)
-# () == ()
-    return g.cursor.fetchall()[0]
+    result = g.cursor.fetchall()
+    return result
 
 def select_from_user_where(what, key, value):
     if what == '*':
         what = user_fields
     query = 'SELECT ' + ', '.join(what) + ' FROM User WHERE ' + key + '="' + value + '";'
-    selected = select(query)
+    selected = select(query)[0]
+    if not selected:
+        return {}
     return dict(zip(what, selected))
 
 def select_followers(user):
     query = 'SELECT follower FROM Followee WHERE name = "' + user + '";'
-    #selected = select(query)
-    g.cursor.execute(query)
-    selected = g.cursor.fetchall()
-    print '\n' + str(selected) + '\n'
-    if selected is None:
-        return []
-    return selected[0]
+    return list(chain.from_iterable(select(query)))
 
 def select_followees(user):
     query = 'SELECT followee FROM Follower WHERE name = "' + user + '";'
-    #selected = select(query)
-    g.cursor.execute(query)
-    selected = g.cursor.fetchall()
-    if selected is None:
-        return []
-    return selected[0]
-
+    return list(chain.from_iterable(select(query)))
 
 @User.route('create/', methods = ['POST']) 
 def user_create():
@@ -73,7 +65,7 @@ def user_details():
     except Exception as e:
         return jsonify({ 'code': 4, 'response': str(e) })
     else:
-        if response is None:
+        if not response:
             return jsonify({ 'code': 1, 'response': 'User not found' })
         for k in response.keys():
             if response[k] == 'None':
@@ -123,12 +115,37 @@ def update_user():
     finally:
         return jsonify({ 'code': 0, 'response': select_from_user_where('*', 'email', data['user']) })
 
+def minimize_response(response):
+    # TODO add subscriptions
+    response = list(dict(zip(user_fields + ['followers', 'followees'], l)) for l in response)
+    new_response = response.pop()
+    new_response['followers'] = [] if new_response['followers'] is None else [new_response['followers']]
+    new_response['followees'] = [] if new_response['followees'] is None else [new_response['followees']]
+    new_response = [new_response]
+    for d in response:
+        # followers - first index
+        # followees - second index
+        if new_response[-1]['email'] == d['email']: # email remains the same
+            new_response[-1]['followers'].append(d['followers']) # 1st index
+            if bisect.bisect_left(new_response[-1]['followees'], d['followees']) == len(new_response[-1]['followees']):
+                new_response[-1]['followees'].append(d['followees'])
+        else:
+            new_response.append(d)
+            new_response[-1]['followers'] = [new_response[-1]['followers']]
+            new_response[-1]['followees'] = [new_response[-1]['followees']]
+    return new_response
+
 @User.route('listFollowers/', methods=['GET'])
 def list_followers():
     data = get_get_data(request)
     if not 'user' in data.keys():
         return jsonify({ 'code': 2, 'response': 'json error' })
-    query = 'SELECT u.' + ', u.'.join(user_fields) + ' FROM User u INNER JOIN Followee f ON u.email = f.name WHERE u.email = "%(user)s"' % data
+    # add subscription query here TODO
+    query = 'SELECT u.' + ', u.'.join(user_fields) + ', fe.follower, fr.followee \
+             FROM User u LEFT JOIN Followee f ON u.email = f.follower \
+                         LEFT JOIN Followee fe ON u.email = fe.name \
+                         LEFT JOIN Follower fr ON u.email = fr.name \
+             WHERE f.name = "%(user)s"' % data
     if 'since_id' in data.keys():
         if data['since_id'].isalnum():
             query += ' AND u.id >= %(since_id)s' % data
@@ -136,9 +153,9 @@ def list_followers():
             return jsonify({ 'code': 2, 'response': 'json error in since_id' })
     if 'order' in data.keys():
         if data['order'] == 'asc':
-            query += ' ORDER BY f.name ASC'
+            query += ' ORDER BY f.follower ASC'
         elif data['order'] == 'desc':
-            query += ' ORDER BY f.name DESC'
+            query += ' ORDER BY f.follower DESC'
         else:
             return jsonify({ 'code': 2, 'response': 'json error in order' })
     if 'limit' in data.keys():
@@ -152,9 +169,7 @@ def list_followers():
     except Exception as e:
         return jsonify({ 'code': 4, 'response': str(e) })
     else:
-        if response is None:
+        if not response:
             return jsonify({ 'code': 1, 'response': 'user not found' })
-        response = dict(zip(user_fields, response))
-        response['followers'] = select_followers(data['user'])
-        response['followees'] = select_followees(data['user'])
+        response = minimize_response(response)
         return jsonify({ 'code': 0, 'response': response })
