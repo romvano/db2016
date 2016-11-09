@@ -2,6 +2,7 @@ from flask import Flask, request, g
 import MySQLdb as db
 from common.common import common
 from User.user import User
+from Forum.forum import Forum
 
 BASE = '/db/api/'
 
@@ -9,6 +10,8 @@ app = Flask(__name__)
 app.config.from_object('config')
 app.register_blueprint(common, url_prefix=BASE)
 app.register_blueprint(User, url_prefix=BASE+'user/')
+app.register_blueprint(Forum, url_prefix=BASE+'forum/')
+#app.register_blueprint(Thread, url_prefix=BASE+'thread/')
 
 @app.before_request
 def connect():
