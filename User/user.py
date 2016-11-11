@@ -2,7 +2,7 @@ from flask import Blueprint, request, g, jsonify
 import MySQLdb as db
 from itertools import chain
 import bisect
-from common.common import get_post_data, get_get_data, select, select_from_where
+from common.common import get_post_data, get_get_data, select, select_from_where, create, update
 
 User = Blueprint('user', __name__)
 
@@ -22,8 +22,8 @@ def select_followees(user):
 @User.route('create/', methods = ['POST']) 
 def user_create():
     data = get_post_data(request)
-    if 'isAnonymous' not in data.keys():
-        data['isAnonymous'] = 'false'
+    data['isAnonymous'] = data.get('isAnonymous', False)
+    return create('User', data, 'email', data['email'])
     try:
         g.cursor.execute(
             'INSERT INTO User(username, about, name, email, isAnonymous) \
@@ -43,9 +43,6 @@ def get_user_where(key, value):
     response = select_from_user_where(key, value)
     if not response:
         return None
-    for k in response.keys():
-        if response[k] == 'None':
-            response[k] = None
     response['followers'] = select_followers(response['email'])
     response['followees'] = select_followees(response['email'])
     # response['subscriptions'] = select_subscriptions(response['email'])
@@ -58,18 +55,12 @@ def user_details():
     if 'user' not in data.keys():
         return jsonify({ 'code': 3, 'response': 'Bad request' })
     try:
-        response = select_from_user_where('email', data['user'])
-    except Exception as e:
+        response = get_user_where('email', data['user'])
+    except db.Error as e:
         return jsonify({ 'code': 4, 'response': str(e) })
     else:
         if not response:
             return jsonify({ 'code': 1, 'response': 'User not found' })
-        for k in response.keys():
-            if response[k] == 'None':
-                response[k] = None
-        response['followers'] = select_followers(data['user'])
-        response['followees'] = select_followees(data['user'])
-#        response['subscriptions'] = TODO
         return jsonify({ 'code': 0, 'response': response })
 
 @User.route('follow/', methods=['POST'])
@@ -100,17 +91,12 @@ def update_user():
     data = get_post_data(request)
     if not {'about', 'user', 'name'} <= set(data.keys()):
         return jsonify({ 'code': 2, 'response': 'json error' })
-    try:
-        g.cursor.execute('UPDATE User SET User.about = "%(about)s", \
-                                          User.name = "%(name)s" WHERE User.email = "%(user)s";' % data)
-    except Exception as e:
-        return jsonify({ 'code': 4, 'response': str(e) })
-    else:
-        g.connection.commit()
-        if g.cursor.rowcount == 0:
-            return jsonify({ 'code': 1, 'response': 'User not found' })
-    finally:
-        return jsonify({ 'code': 0, 'response': select_from_user_where('email', data['user']) })
+    return update(
+        'User',
+        { 'about': data['about'], 'name': data['name'] },
+        { 'email': data['user'] },
+        select_from_user_where('email', data['user'])
+    )
 
 def minimize_response(response, ls):
     # TODO add subscriptions

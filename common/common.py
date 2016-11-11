@@ -15,50 +15,86 @@ tables = [
 ]
 
 def get_post_data(request):
-    return dict((k.encode('utf-8'), unicode(v)) for (k, v) in request.json.items())
+    return dict((k, v) for (k, v) in request.json.items())
 
 def get_get_data(request):
     return dict((k, request.args[k]) for k in request.args)
 
-def select(query):
-    g.cursor.execute(query)
+def select(query, params=()):
+    g.cursor.execute(query, params)
     result = g.cursor.fetchall()
     return result
 
-def select_from_where(table, what, key, value):
-    query = 'SELECT ' + ', '.join(what) + ' FROM ' + table + ' WHERE ' + key + '="' + value + '";'
-    selected = select(query)[0]
+def select_from_where(table, what='', key=None, value=None):
+    query = 'SELECT ' + ', '.join(what) + ' FROM ' + table + ' WHERE ' + key + '= %s;'
+    params = (value,)
+    selected = select(query, params)[0]
     if not selected:
         return {}
+    return {k: v if k != 'date' else v.strftime('%Y-%m-%d %H:%M:%S') for (k, v) in zip(what, selected)}
     return dict(zip(what, selected))
 
-def create(table, fields, data, *select_args):
-    try:
-        query = ('INSERT INTO ' + table + '(' + ', '.join(fields) + ') \
-                 VALUES ("%(' + ')s", "%('.join(fields) + ')s");') % data
-        g.cursor.execute(query)
-    except db.IntegrityError as ie:
-        g.connection.rollback()
-        return jsonify({ 'code': 0, 'response': select_from_where(table, ['id'] + fields, *select_args) })
-    except db.Error as e:
-        g.connection.rollback()
+def create_update_exceptions(table, e, success):
+    g.connection.rollback()
+    if e == db.IntegrityError:
+        if table == 'User':
+            return jsonify({ 'code': 5, 'response': str(e)})
+        return jsonify({ 'code': 0, 'response': success })
+    if e == db.DataError:
+        return jsonify({ 'code': 2, 'response': str(e) })
+    if e == db.Error:
         return jsonify({ 'code': 4, 'response': str(e) })
+    raise Exception()
+   
+def create(table, data, *select_args):
+    try:
+        query = 'INSERT INTO ' + table + '(' + ', '.join(data.keys()) + ') \
+                 VALUES (' + '%s, '*(len(data) - 1) + '%s)'
+        g.cursor.execute(query, tuple(data.values()))
+    except Exception as e:
+        success = data if not select_args else select_from_where(table, ['id']+data.keys(), *select_args)
+        return create_update_exceptions(table, type(e), success)
     else:
         data['id'] = g.cursor.lastrowid
         g.connection.commit()
         return jsonify({ 'code': 0, 'response': data })
 
-def details(table, fields, *select_params):
+
+def update(table, data, clause, success):
+    query = 'UPDATE ' + table + 'SET '
+    for i, field in enumerate(data):
+        query += table + '.' + field + ' = ' + '%s'
+        query += ', ' if i < len(data) else ''
+    query += ' WHERE '
+    for i, field in enumerate(clause):
+        query += table + '.' + field + ' = ' + '%s'
+        query += ' AND ' if i < len(clause) else ';'
     try:
-        response = select_function(*select_params)
-    except db.Error as e:
-        return jsonify({ 'code': 4, 'response': str(e) })
+        g.cursor.execute(query, tuple(data.values()) + tuple(clause.values()))
+    except Exception as e:
+        return create_update_exceptions(table, e, success)
     else:
-        if response is None:
-            return jsonify({ 'code': 1, 'response': 'Object not found' })
-        return jsonify({ 'code': 0, 'response': response })
-    
-    
+        if g.cursor.rowcount == 0:
+            return jsonify({ 'code': 1, 'response': 'No object was changed' })
+    finally:
+        g.connection.commit()
+        return jsonify({ 'code': 0, 'response': success })
+
+def delete(table, clause, success):
+    query = 'DELETE FROM ' + table + ' WHERE ' 
+    for i, field in enumerate(clause):
+        query += table + '.' + field + ' = ' + '%s'
+        query += ' AND ' if i < len(clause) else ';'
+    try:
+        g.cursor.execute(query, tuple(clause.values()))
+    except Exception as e:
+        return create_update_exceptions(table, e, success)
+    else:
+        if g.cursor.rowcount == 0:
+            return jsonify({ 'code': 1, 'response': 'No object was changed' })
+    finally:
+        g.connection.commit()
+        return jsonify({ 'code': 0, 'response': success })
 
 @common.route('clear/', methods=['POST'])
 def clear():
