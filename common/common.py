@@ -193,16 +193,21 @@ def status():
 
 def list_threads_where(data, clause):
     query = 'SELECT DISTINCT t.' + ', t.'.join(thread_fields)
+    join = 'user' if 'user' in data else 'forum'
     forum = 'forum' in data['related']
     user = 'user' in data['related']
     if forum:
         query += ', f.' + ', f.'.join(forum_fields)
     if user:
         query += ', u.' + ', u.'.join(user_fields) + ', fe.follower, fr.followee, s.thread'
-    query += ' FROM Thread t LEFT JOIN Forum f ON t.forum = f.short_name '
+    query += ' FROM Thread t LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON t.' + join + ' = ' + join[0] + '.'
+    query += 'email ' if join == 'user' else 'short_name '
+    if forum and join != 'forum':
+        query += ' LEFT JOIN Forum f ON t.forum = f.short_name '
     if user:
-        query += ' LEFT JOIN User u ON t.user = u.email \
-                   LEFT JOIN Followee fe ON t.user = fe.name \
+        if join != 'user':
+            query += ' LEFT JOIN User u ON t.user = u.email '
+        query += ' LEFT JOIN Followee fe ON t.user = fe.name \
                    LEFT JOIN Follower fr ON t.user = fr.name \
                    LEFT JOIN Subscription s ON t.user = s.name '
     query += ' WHERE '
@@ -250,6 +255,81 @@ def list_threads_where(data, clause):
                 if 'user' in data['related']:
                     thread['user'] = { k[2:]: thread.pop(k) for k in uf + user_list_fields }
                 thread['date'] = thread['date'].strftime('%Y-%m-%d %H:%M:%S')
+            print response
+            limit = int(data.get('limit', len(response)))
+            response = response[0:limit]
+        return jsonify({ 'code': 0, 'response': response })
+
+def list_posts_where(data, clause):
+    query = 'SELECT DISTINCT p.' + ', p.'.join(post_fields)
+    join = 'thread' if 'thread' in data else 'forum'
+    forum = 'forum' in data['related']
+    thread = 'thread' in data['related']
+    user = 'user' in data['related']
+    if forum:
+        query += ', f.' + ', f.'.join(forum_fields)
+    if thread:
+        query += ', t.' + ', t.'.join(thread_fields)
+    if user:
+        query += ', u.' + ', u.'.join(user_fields) + ', fe.follower, fr.followee, s.thread'
+    query += ' FROM Post p LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
+    query += 'id ' if join == 'thread' else 'short_name '
+    if forum and join != 'forum':
+        query += ' LEFT JOIN Forum f ON p.forum = f.short_name'
+    if thread and join != 'thread':
+        query += ' LEFT JOIN Thread t ON p.thread = t.id '
+    if user:
+        query += ' LEFT JOIN User u ON p.user = u.email \
+                   LEFT JOIN Followee fe ON p.user = fe.name \
+                   LEFT JOIN Follower fr ON p.user = fr.name \
+                   LEFT JOIN Subscription s ON p.user = s.name '
+    query += ' WHERE '
+    for i, field in enumerate(clause):
+        query += 'p.' + field + ' = ' + '%s'
+        query += ' AND ' if i < len(clause)-1 else ''
+    if 'since' in data.keys():
+        query += ' AND p.date >= "%(since)s"' % data
+    if 'order' in data.keys():
+        if data['order'] == 'asc':
+            query += ' ORDER BY p.date ASC'
+        elif data['order'] == 'desc':
+            query += ' ORDER BY p.date DESC'
+        else:
+            return jsonify({ 'code': 2, 'response': 'json error in order' })
+    if 'limit' in data.keys():
+        if not (data['limit'].lstrip('-').isdigit() and int(data['limit']) >= 0):
+            return jsonify({ 'code': 2, 'response': 'json error in limit' })
+    query += ';'
+    try:
+        response = select(query, clause.values())
+    except db.Error as e:
+        print str(e)
+        return jsonify({ 'code': 4, 'response': str(e) })
+    else:
+        if not response:
+            response = []
+        else:
+            fields = post_fields[:]
+            if forum:
+                ff = ['f_' + f for f in forum_fields]
+                fields += ff
+            if thread:
+                tf = ['t_' + t for t in thread_fields]
+                fields += tf
+            if user:
+                uf = ['u_' + u for u in user_fields]
+                fields += uf
+            user_list_fields = ['u_followers', 'u_following', 'u_subscriptions'] if user else []
+            response = minimize_response(response, fields, 'id', user_list_fields)
+            for d in response:
+                if forum:
+                    d['forum'] = { k[2:]: d.pop(k) for k in ff }
+                if thread:
+                    d['thread'] = { k[2:]: d.pop(k) for k in tf }
+                    d['thread']['date'] = d['thread']['date'].strftime('%Y-%m-%d %H:%M:%S')
+                if user:
+                    d['user'] = { k[2:]: d.pop(k) for k in uf + user_list_fields }
+                d['date'] = d['date'].strftime('%Y-%m-%d %H:%M:%S')
             print response
             limit = int(data.get('limit', len(response)))
             response = response[0:limit]

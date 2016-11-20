@@ -51,3 +51,11 @@ def list_threads():
         return jsonify({ 'code': 3, 'response': 'Bad request' })
     data['related'] = request.args.getlist('related')
     return list_threads_where(data, { 'forum': data['forum'] })
+
+@Forum.route('listPosts/', methods=['GET'])
+def list_posts():
+    data = get_get_data(request)
+    if 'forum' not in data:
+        return jsonify({ 'code': 3, 'response': 'Bad request' })
+    data['related'] = request.args.getlist('related')
+    return list_posts_where(data, { 'forum': data['forum'] })

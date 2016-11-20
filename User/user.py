@@ -6,8 +6,6 @@ from common.common import *
 
 User = Blueprint('user', __name__)
 
-user_fields = ['id', 'username', 'about', 'name', 'email', 'isAnonymous']
-
 def select_from_user_where(key, value):
     return select_from_where('User', user_fields, key, value)
 
@@ -101,3 +99,10 @@ def list_followers():
     (table, email) = ('Followee', 'follower') if action == 'listFollowers' else ('Follower', 'followee')
     return list_users_where_email(table, email, data, { 'name': data['user'] })
 
+@User.route('listPosts/', methods=['GET'])
+def list_posts():
+    data = get_get_data(request)
+    if 'user' not in data:
+        return jsonify({ 'code': 3, 'response': 'Bad request' })
+    data['related'] = request.args.getlist('related')
+    return list_posts_where(data, { 'user': data['user'] })
