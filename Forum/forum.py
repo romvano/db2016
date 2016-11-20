@@ -2,13 +2,10 @@ from flask import Blueprint, request, g, jsonify
 import MySQLdb as db
 from itertools import chain
 import bisect
-from common.common import get_post_data, get_get_data, select, select_from_where, create
-from User.user import User as u, get_user_where, list_users_where_email
+from common.common import *
+from User.user import User as u, get_user_where
 
 Forum = Blueprint('forum', __name__)
-
-forum_fields_to_insert = ['name', 'short_name', 'user']
-forum_fields = ['id'] + forum_fields_to_insert
 
 def select_from_forum_where(key, value):
     return select_from_where('Forum', forum_fields, key, value)
@@ -46,3 +43,11 @@ def list_users():
     table, email = 'Post', 'user'
     response = list_users_where_email(table, email, data, { 'forum': data['forum'] })
     return response
+
+@Forum.route('listThreads/', methods=['GET'])
+def list_threads():
+    data = get_get_data(request)
+    if 'forum' not in data:
+        return jsonify({ 'code': 3, 'response': 'Bad request' })
+    data['related'] = request.args.getlist('related')
+    return list_threads_where(data, { 'forum': data['forum'] })

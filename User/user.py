@@ -2,7 +2,7 @@ from flask import Blueprint, request, g, jsonify
 import MySQLdb as db
 from itertools import chain
 import bisect
-from common.common import get_post_data, get_get_data, select, select_from_where, create, update
+from common.common import *
 
 User = Blueprint('user', __name__)
 
@@ -89,69 +89,6 @@ def update_user():
         { 'email': data['user'].join('""') },
         lambda: (select_from_user_where('email', data['user']))
     ))
-
-def minimize_response(response):
-    response = list(dict(zip(user_fields + ['followers', 'following', 'subscriptions'], l)) for l in response)
-    new_response = response.pop(0)
-    new_response['followers'] = [] if new_response['followers'] is None else [new_response['followers']]
-    new_response['following'] = [] if new_response['following'] is None else [new_response['following']]
-    new_response['subscriptions'] = [] if new_response['subscriptions'] is None else [new_response['subscriptions']]
-    new_response = [new_response]
-    for d in response:
-        if new_response[-1]['email'] == d['email']: # email remains the same
-            if new_response[-1]['followers'] != d['followers'] and d['followers'] is not None:
-                new_response[-1]['followers'].append(d['followers']) # 1st index
-            if new_response[-1]['following'] != d['following'] and d['following'] is not None:
-                new_response[-1]['following'].append(d['following'])
-            if new_response[-1]['subscriptions'] != d['subscriptions'] and d['subscriptions'] is not None:
-                new_response[-1]['subscriptions'].append(d['subscriptions'])
-        else:
-            new_response.append(d)
-            new_response[-1]['followers'] = [] if new_response[-1]['followers'] is None else [new_response[-1]['followers']]
-            new_response[-1]['following'] = [] if new_response[-1]['following'] is None else [new_response[-1]['following']]
-            new_response[-1]['subscriptions'] = [] if new_response[-1]['subscriptions'] is None else[new_response[-1]['subscriptions']]
-    return new_response
-
-def list_users_where_email(table, email, data, clause):
-    query = 'SELECT DISTINCT u.' + ', u.'.join(user_fields) + ', fe.follower, fr.followee, s.thread \
-             FROM User u LEFT JOIN ' + table + ' t ON u.email = t.' + email + ' \
-                         LEFT JOIN Followee fe ON u.email = fe.name \
-                         LEFT JOIN Follower fr ON u.email = fr.name \
-                         LEFT JOIN Subscription s ON u.email = s.name \
-             WHERE '
-    for i, field in enumerate(clause):
-        query += 't.' + field + ' = ' + '%s'
-        query += ' AND ' if i < len(clause)-1 else ''
-    if 'since_id' in data.keys():
-        if data['since_id'].lstrip('-').isdigit():
-            query += ' AND u.id >= %(since_id)s' % data
-        else:
-            return jsonify({ 'code': 2, 'response': 'json error in since_id' })
-    if 'order' in data.keys():
-        if data['order'] == 'asc':
-            query += ' ORDER BY u.name ASC'
-        elif data['order'] == 'desc':
-            query += ' ORDER BY u.name DESC'
-        else:
-            return jsonify({ 'code': 2, 'response': 'json error in order' })
-    if 'limit' in data.keys():
-        if not (data['limit'].lstrip('-').isdigit() and int(data['limit']) >= 0):
-            return jsonify({ 'code': 2, 'response': 'json error in limit' })
-    query += ';'
-    try:
-        response = select(query, clause.values())
-    except db.Error as e:
-        return jsonify({ 'code': 4, 'response': str(e) })
-    else:
-        if not response:
-            response = []
-        else:
-            response = minimize_response(response)
-            limit = int(data.get('limit', len(response)))
-            print '\n\n\n', str(response)
-            response = response[0:limit]
-        return jsonify({ 'code': 0, 'response': response })
-    
 
 @User.route('listFollowers/', methods=['GET'])
 @User.route('listFollowing/', methods=['GET'])

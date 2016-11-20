@@ -14,6 +14,14 @@ tables = [
     'Subscription'
 ]
 
+user_fields = ['id', 'username', 'about', 'name', 'email', 'isAnonymous']
+post_fields_to_insert = ['date', 'forum', 'isApproved', 'isDeleted', 'isEdited', 'isHighlighted', 'isSpam', 'message', 'parent', 'thread', 'user']
+post_fields = ['id'] + post_fields_to_insert + ['likes', 'dislikes', 'points']
+thread_fields_to_insert = ['forum', 'title', 'isClosed', 'user', 'date', 'message', 'slug', 'isDeleted']
+thread_fields = ['id'] + thread_fields_to_insert + ['dislikes', 'likes', 'points', 'posts']
+forum_fields_to_insert = ['name', 'short_name', 'user']
+forum_fields = ['id'] + forum_fields_to_insert
+
 def get_post_data(request):
     return dict((k, v) for (k, v) in request.json.items())
 
@@ -21,6 +29,7 @@ def get_get_data(request):
     return dict(request.args.items())
 
 def select(query, params=()):
+    print query, params
     g.cursor.execute(query, params)
     print g.cursor._last_executed
     result = g.cursor.fetchall()
@@ -32,7 +41,10 @@ def select_from_where(table, what='', key=None, value=None):
     selected = select(query, params)
     if not selected:
         return None
-    return {k: v if k != 'date' else v.strftime('%Y-%m-%d %H:%M:%S') for (k, v) in zip(what, selected[0])}
+    result = dict(zip(what, selected[0]))
+    if 'date' in result:
+        result['date'] = result['date'].strftime('%Y-%m-%d %H:%M:%S')
+    return result
 
 def create_update_exceptions(table, e, success):
     print g.cursor._last_executed
@@ -100,6 +112,63 @@ def delete(table, clause, success):
         g.connection.commit()
         return { 'code': 0, 'response': success }
 
+def minimize_response(response, default_fields, main_field, additional_fields=[]):
+    print response
+    response = list(dict(zip(default_fields + additional_fields, l)) for l in response)
+    new_response = response.pop(0)
+    for f in additional_fields:
+        new_response[f] = [] if new_response[f] is None else [new_response[f]]
+    new_response = [new_response]
+    for d in response:
+        if new_response[-1][main_field] == d[main_field]: # email remains the same
+            for f in additional_fields:
+                if new_response[-1][f] != d[f] and d[f] is not None:
+                    new_response[-1][f].append(d[f])
+        else:
+            new_response.append(d)
+            for f in additional_fields:
+                new_response[-1][f] = [] if new_response[-1][f] is None else [new_response[-1][f]]
+    return new_response
+
+def list_users_where_email(table, email, data, clause):
+    query = 'SELECT DISTINCT u.' + ', u.'.join(user_fields) + ', fe.follower, fr.followee, s.thread \
+             FROM User u LEFT JOIN ' + table + ' t ON u.email = t.' + email + ' \
+                         LEFT JOIN Followee fe ON u.email = fe.name \
+                         LEFT JOIN Follower fr ON u.email = fr.name \
+                         LEFT JOIN Subscription s ON u.email = s.name \
+             WHERE '
+    for i, field in enumerate(clause):
+        query += 't.' + field + ' = ' + '%s'
+        query += ' AND ' if i < len(clause)-1 else ''
+    if 'since_id' in data.keys():
+        if data['since_id'].lstrip('-').isdigit():
+            query += ' AND u.id >= %(since_id)s' % data
+        else:
+            return jsonify({ 'code': 2, 'response': 'json error in since_id' })
+    if 'order' in data.keys():
+        if data['order'] == 'asc':
+            query += ' ORDER BY u.name ASC'
+        elif data['order'] == 'desc':
+            query += ' ORDER BY u.name DESC'
+        else:
+            return jsonify({ 'code': 2, 'response': 'json error in order' })
+    if 'limit' in data.keys():
+        if not (data['limit'].lstrip('-').isdigit() and int(data['limit']) >= 0):
+            return jsonify({ 'code': 2, 'response': 'json error in limit' })
+    query += ';'
+    try:
+        response = select(query, clause.values())
+    except db.Error as e:
+        return jsonify({ 'code': 4, 'response': str(e) })
+    else:
+        if not response:
+            response = []
+        else:
+            response = minimize_response(response, user_fields, 'email', ['followers', 'following', 'subscriptions'])
+            limit = int(data.get('limit', len(response)))
+            response = response[0:limit]
+        return jsonify({ 'code': 0, 'response': response })
+
 @common.route('clear/', methods=['POST'])
 def clear():
     try:
@@ -121,3 +190,67 @@ def status():
     except:
         g.connection.rollback()
         return jsonify({ 'code': 1, 'response': str(e) })
+
+def list_threads_where(data, clause):
+    query = 'SELECT DISTINCT t.' + ', t.'.join(thread_fields)
+    forum = 'forum' in data['related']
+    user = 'user' in data['related']
+    if forum:
+        query += ', f.' + ', f.'.join(forum_fields)
+    if user:
+        query += ', u.' + ', u.'.join(user_fields) + ', fe.follower, fr.followee, s.thread'
+    query += ' FROM Thread t LEFT JOIN Forum f ON t.forum = f.short_name '
+    if user:
+        query += ' LEFT JOIN User u ON t.user = u.email \
+                   LEFT JOIN Followee fe ON t.user = fe.name \
+                   LEFT JOIN Follower fr ON t.user = fr.name \
+                   LEFT JOIN Subscription s ON t.user = s.name '
+    query += ' WHERE '
+    for i, field in enumerate(clause):
+        query += 't.' + field + ' = ' + '%s'
+        query += ' AND ' if i < len(clause)-1 else ''
+    if 'since' in data.keys():
+        query += ' AND t.date >= "%(since)s"' % data
+    if 'order' in data.keys():
+        if data['order'] == 'asc':
+            query += ' ORDER BY t.date ASC'
+        elif data['order'] == 'desc':
+            query += ' ORDER BY t.date DESC'
+        else:
+            return jsonify({ 'code': 2, 'response': 'json error in order' })
+    if 'limit' in data.keys():
+        if not (data['limit'].lstrip('-').isdigit() and int(data['limit']) >= 0):
+            return jsonify({ 'code': 2, 'response': 'json error in limit' })
+    query += ';'
+    try:
+        print 'try'
+        response = select(query, clause.values())
+        print 'success'
+    except db.Error as e:
+        print str(e)
+        return jsonify({ 'code': 4, 'response': str(e) })
+    else:
+        if not response:
+            response = []
+        else:
+            fields = thread_fields[:]
+            if forum:
+                ff = ['f_' + f for f in forum_fields]
+                fields += ff
+            if user:
+                uf = ['u_' + u for u in user_fields]
+                fields += uf
+            user_list_fields = ['u_followers', 'u_following', 'u_subscriptions'] if user else []
+            response = minimize_response(response, fields, 'id', user_list_fields)
+            print 'minimized: ', response, '\n\n'
+            for thread in response:
+                print type(thread)
+                if 'forum' in data['related']:
+                    thread['forum'] = { k[2:]: thread.pop(k) for k in ff }
+                if 'user' in data['related']:
+                    thread['user'] = { k[2:]: thread.pop(k) for k in uf + user_list_fields }
+                thread['date'] = thread['date'].strftime('%Y-%m-%d %H:%M:%S')
+            print response
+            limit = int(data.get('limit', len(response)))
+            response = response[0:limit]
+        return jsonify({ 'code': 0, 'response': response })
