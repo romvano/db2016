@@ -20,9 +20,9 @@ app.register_blueprint(Post, url_prefix=BASE+'post/')
 def connect():
     g.connection = db.connect(
         host = '127.0.0.1',
-        user = 'tpdb',
-        passwd = 'tpdb',
-        db = 'dbforumtry1',
+        user = 'dbapi',
+        passwd = 'dbapi',
+        db = 'dbapi',
         charset = 'utf8'
     )
     g.cursor = g.connection.cursor()

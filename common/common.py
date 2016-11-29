@@ -5,14 +5,14 @@ import json
 common = Blueprint('common', __name__)
 
 tables = [
-    'User',
-    'Thread',
-    'Forum',
-    'Post',
     'Follower',
     'Followee',
     'Subscription',
     'PostHierarchy',
+    'Post',
+    'Forum',
+    'Thread',
+    'User',
 ]
 
 user_fields = ['id', 'username', 'about', 'name', 'email', 'isAnonymous']
@@ -175,8 +175,10 @@ def list_users_where_email(table, email, data, clause):
 @common.route('clear/', methods=['POST'])
 def clear():
     try:
+        g.cursor.execute('SET FOREIGN_KEY_CHECKS = 0;')
         for table in tables:
             g.cursor.execute('TRUNCATE %s;' % table)
+        g.cursor.execute('SET FOREIGN_KEY_CHECKS = 1;')
         return jsonify({ 'code': 0, 'response': 'OK' })
     except db.Error as e:
         g.connection.rollback()
