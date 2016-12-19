@@ -130,11 +130,11 @@ def minimize_response(response, default_fields, main_field, additional_fields=[]
     return new_response
 
 def list_users_where_email(table, email, data, clause):
-    query = 'SELECT DISTINCT u.' + ', u.'.join(user_fields) + ', GROUP_CONCAT(fe.follower), GROUP_CONCAT(fr.followee), GROUP_CONCAT(s.thread) \
+    query = 'SELECT DISTINCT u.' + ', u.'.join(user_fields) + ', \
+             (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
+             (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) \
              FROM User u LEFT JOIN ' + table + ' t ON u.email = t.' + email + ' \
-                         LEFT JOIN Followee fe ON u.email = fe.name \
-                         LEFT JOIN Follower fr ON u.email = fr.name \
-                         LEFT JOIN Subscription s ON u.email = s.name \
              WHERE '
     for i, field in enumerate(clause):
         query += 't.' + field + ' = ' + '%s'
@@ -144,7 +144,6 @@ def list_users_where_email(table, email, data, clause):
             query += ' AND u.id >= %(since_id)s' % data
         else:
             return jsonify({ 'code': 2, 'response': 'json error in since_id' })
-    query += ' GROUP BY u.email '
     if 'order' in data.keys():
         if data['order'] == 'asc':
             query += ' ORDER BY u.name ASC'
@@ -204,7 +203,10 @@ def list_threads_where(data, clause):
     if forum:
         query += ', f.' + ', f.'.join(forum_fields)
     if user:
-        query += ', u.' + ', u.'.join(user_fields) + ', GROUP_CONCAT(fe.follower), GROUP_CONCAT(fr.followee), GROUP_CONCAT(s.thread)'
+        query += ', u.' + ', u.'.join(user_fields) + ', \
+             (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
+             (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) '
     query += ' FROM Thread t LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON t.' + join + ' = ' + join[0] + '.'
     query += 'email ' if join == 'user' else 'short_name '
     if forum and join != 'forum':
@@ -212,17 +214,12 @@ def list_threads_where(data, clause):
     if user:
         if join != 'user':
             query += ' LEFT JOIN User u ON t.user = u.email '
-        query += ' LEFT JOIN Followee fe ON t.user = fe.name \
-                   LEFT JOIN Follower fr ON t.user = fr.name \
-                   LEFT JOIN Subscription s ON t.user = s.name '
     query += ' WHERE '
     for i, field in enumerate(clause):
         query += 't.' + field + ' = ' + '%s'
         query += ' AND ' if i < len(clause)-1 else ''
     if 'since' in data.keys():
         query += ' AND t.date >= "%(since)s"' % data
-    if user:
-        query += ' GROUP BY t.id '
     if 'order' in data.keys():
         if data['order'] == 'asc':
             query += ' ORDER BY t.date ASC'
@@ -274,7 +271,10 @@ def list_posts_where(data, clause, sort='flat'):
     if thread:
         query += ', t.' + ', t.'.join(thread_fields)
     if user:
-        query += ', u.' + ', u.'.join(user_fields) + ', fe.follower, fr.followee, s.thread'
+        query += ', u.' + ', u.'.join(user_fields) + ', \
+             (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
+             (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) '
     query += ' FROM Post p LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
     query += 'id ' if join == 'thread' else 'short_name '
     if sort != 'flat':
