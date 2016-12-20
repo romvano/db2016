@@ -130,11 +130,12 @@ def minimize_response(response, default_fields, main_field, additional_fields=[]
     return new_response
 
 def list_users_where_email(table, email, data, clause):
+    force_index = 'PRIMARY' if table != 'Forum' else 'user_date'
     query = 'SELECT DISTINCT u.' + ', u.'.join(user_fields) + ', \
              (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
              (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
              (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) \
-             FROM User u LEFT JOIN ' + table + ' t ON u.email = t.' + email + ' \
+             FROM User u LEFT JOIN ' + table + ' t FORCE INDEX (' + force_index + ') ON u.email = t.' + email + ' \
              WHERE '
     for i, field in enumerate(clause):
         query += 't.' + field + ' = ' + '%s'
@@ -275,23 +276,23 @@ def list_posts_where(data, clause, sort='flat'):
              (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
              (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
              (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) '
-    query += ' FROM Post p LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
-    query += 'id ' if join == 'thread' else 'short_name '
-    if sort != 'flat':
-        query += ' LEFT JOIN PostHierarchy ph ON p.id = ph.post '
+    if sort != 'flat' and 'order' in data and data['order'].lower() == 'asc':
+        query += ' FROM PostHierarchy ph LEFT JOIN Post p FORCE INDEX (PRIMARY) ON ph.post = p.id '
+    else:
+        query += ' FROM Post p LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
+        query += 'id ' if join == 'thread' else 'short_name '
+        if sort != 'flat':
+            query += ' LEFT JOIN PostHierarchy ph ON p.id = ph.post '
     if forum and join != 'forum':
         query += ' LEFT JOIN Forum f ON p.forum = f.short_name'
     if thread and join != 'thread':
         query += ' LEFT JOIN Thread t ON p.thread = t.id '
     if user:
-        query += ' LEFT JOIN User u ON p.user = u.email \
-                   LEFT JOIN Followee fe ON p.user = fe.name \
-                   LEFT JOIN Follower fr ON p.user = fr.name \
-                   LEFT JOIN Subscription s ON p.user = s.name '
+        query += ' LEFT JOIN User u ON p.user = u.email ' 
     query += ' WHERE '
     if sort == 'parent_tree':
         if 'limit' in data:
-            query += ' ph.parent IN (SELECT parent FROM (SELECT DISTINCT ph.parent FROM Post p LEFT JOIN PostHierarchy ph ON p.id = ph.post WHERE '
+            query += ' ph.parent IN (SELECT parent FROM (SELECT DISTINCT ph.parent FROM PostHierarchy ph LEFT JOIN Post p FORCE INDEX (PRIMARY) ON p.id = ph.post WHERE '
         else:
             sort = 'tree'
 
