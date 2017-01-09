@@ -130,16 +130,15 @@ def minimize_response(response, default_fields, main_field, additional_fields=[]
     return new_response
 
 def list_users_where_email(table, email, data, clause):
-    force_index = 'PRIMARY' if table != 'Forum' else 'user_date'
-    query = 'SELECT DISTINCT u.' + ', u.'.join(user_fields) + ', \
-             (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
-             (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
-             (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) \
-             FROM User u LEFT JOIN ' + table + ' t FORCE INDEX (' + force_index + ') ON u.email = t.' + email + ' \
-             WHERE '
+    query = 'SELECT u.' + ', u.'.join(user_fields) + ', \
+             (SELECT GROUP_CONCAT( fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT( fr.followee) FROM Follower fr WHERE fr.name = u.email), \
+             (SELECT GROUP_CONCAT( s.thread) FROM Subscription s WHERE s.name = u.email) \
+             FROM User u WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
     for i, field in enumerate(clause):
         query += 't.' + field + ' = ' + '%s'
         query += ' AND ' if i < len(clause)-1 else ''
+        query += ') '
     if 'since_id' in data.keys():
         if data['since_id'].lstrip('-').isdigit():
             query += ' AND u.id >= %(since_id)s' % data
@@ -262,7 +261,7 @@ def list_threads_where(data, clause):
         return jsonify({ 'code': 0, 'response': response })
 
 def list_posts_where(data, clause, sort='flat'):
-    query = 'SELECT DISTINCT p.' + ', p.'.join(post_fields)
+    query = 'SELECT p.' + ', p.'.join(post_fields)
     join = 'thread' if 'thread' in data else 'forum'
     forum = 'forum' in data['related']
     thread = 'thread' in data['related']
@@ -279,8 +278,10 @@ def list_posts_where(data, clause, sort='flat'):
     if sort != 'flat' and 'order' in data and data['order'].lower() == 'asc':
         query += ' FROM PostHierarchy ph LEFT JOIN Post p FORCE INDEX (PRIMARY) ON ph.post = p.id '
     else:
-        query += ' FROM Post p LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
-        query += 'id ' if join == 'thread' else 'short_name '
+        query += ' FROM Post p '
+        if user or forum or thread:
+            query += ' LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
+            query += 'id ' if join == 'thread' else 'short_name '
         if sort != 'flat':
             query += ' LEFT JOIN PostHierarchy ph ON p.id = ph.post '
     if forum and join != 'forum':

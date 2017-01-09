@@ -1,4 +1,14 @@
 SELECT id, username, about, name, email, isAnonymous FROM User WHERE email= example@mail.ru;
+
+
+ SELECT * FROM PostHierarchy ph LEFT JOIN Post p ON ph.post = p.id  LEFT JOIN Thread t force index (PRIMARY) ON p.thread = t.id      WHERE ph.parent IN ( SELECT parent FROM (    SELECT ph.parent from PostHierarchy ph left join Post p force index (PRIMARY) ON p.id = ph.post        WHERE p.thread = '4' AND p.date >= "2014-01-01 00:00:00"         ORDER BY ph.parent ASC         LIMIT 2 ) a  ) ORDER BY ph.parent ASC , ph.address;
+
+
+
+
+
+
+
 SELECT follower FROM Followee WHERE name = "example@mail.ru";
 SELECT followee FROM Follower WHERE name = "example@mail.ru";
 SELECT thread FROM Subscription WHERE name = example@mail.ru;

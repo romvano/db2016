@@ -5,6 +5,7 @@ from User.user import User
 from Forum.forum import Forum
 from Thread.thread import Thread
 from Post.post import Post
+from werkzeug.contrib.fixers import ProxyFix
 
 BASE = '/db/api/'
 
@@ -19,17 +20,18 @@ app.register_blueprint(Post, url_prefix=BASE+'post/')
 @app.before_request
 def connect():
     g.connection = db.connect(
-        host = '127.0.0.1',
+        host = 'localhost',
         user = 'dbapi',
         passwd = 'dbapi',
         db = 'dbapi',
         charset = 'utf8'
-    )
+  )
     g.cursor = g.connection.cursor()
 
 @app.teardown_request
 def disconnect(e):
     g.connection.close()
 
+app.wsgi_app = ProxyFix(app.wsgi_app)
 if __name__ == '__main__':
     app.run()
