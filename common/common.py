@@ -196,23 +196,29 @@ def status():
         return jsonify({ 'code': 1, 'response': str(e) })
 
 def list_threads_where(data, clause):
-    query = 'SELECT DISTINCT t.' + ', t.'.join(thread_fields)
+    query = 'SELECT t.' + ', t.'.join(thread_fields)
     forum = 'forum' in data['related']
     user = 'user' in data['related']
-    join = 'user' if user else 'forum'
+    if user:
+        join = 'user'
+    elif forum:
+        join = 'forum'
+    else:
+        join = None
     if forum:
         query += ', f.' + ', f.'.join(forum_fields)
     if user:
         query += ', u.' + ', u.'.join(user_fields) + ', \
-             (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
-             (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
-             (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) '
-    query += ' FROM Thread t LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON t.' + join + ' = ' + join[0] + '.'
-    query += 'email ' if join == 'user' else 'short_name '
+             (SELECT GROUP_CONCAT(fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT(fr.followee) FROM Follower fr WHERE fr.name = u.email), \
+             (SELECT GROUP_CONCAT(s.thread) FROM Subscription s WHERE s.name = u.email) '
+    query += ' FROM Thread t '
+    if join:
+        query += 'LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON t.' + join + ' = ' + join[0] + '.'
+        query += 'email ' if join == 'user' else 'short_name '
     if forum and join != 'forum':
         query += ' LEFT JOIN Forum f ON t.forum = f.short_name '
-    if user:
-        if join != 'user':
+    if user and join != 'user':
             query += ' LEFT JOIN User u ON t.user = u.email '
     query += ' WHERE '
     for i, field in enumerate(clause):
@@ -272,9 +278,9 @@ def list_posts_where(data, clause, sort='flat'):
         query += ', t.' + ', t.'.join(thread_fields)
     if user:
         query += ', u.' + ', u.'.join(user_fields) + ', \
-             (SELECT GROUP_CONCAT(DISTINCT fe.follower) FROM Followee fe WHERE fe.name = u.email), \
-             (SELECT GROUP_CONCAT(DISTINCT fr.followee) FROM Follower fr WHERE fr.name = u.email), \
-             (SELECT GROUP_CONCAT(DISTINCT s.thread) FROM Subscription s WHERE s.name = u.email) '
+             (SELECT GROUP_CONCAT(fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT(fr.followee) FROM Follower fr WHERE fr.name = u.email), \
+             (SELECT GROUP_CONCAT(s.thread) FROM Subscription s WHERE s.name = u.email) '
     if sort != 'flat' and 'order' in data and data['order'].lower() == 'asc':
         query += ' FROM PostHierarchy ph LEFT JOIN Post p FORCE INDEX (PRIMARY) ON ph.post = p.id '
     else:
