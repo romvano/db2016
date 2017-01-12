@@ -15,7 +15,7 @@ def create_forum():
     data = get_post_data(request)
     if not {'name', 'short_name', 'user'} <= set(data.keys()):
         return jsonify({ 'code': 3, 'response': 'Bad request' })
-    return jsonify(create('Forum', data, 'short_name', data['short_name']))
+    return jsonify(create('Forum', data, forum_fields, 'short_name', data['short_name']))
 
 @Forum.route('details/', methods=['GET'])
 def forum_details():
