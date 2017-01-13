@@ -283,7 +283,7 @@ def list_posts_where(data, clause, sort='flat'):
     if sort != 'flat' and 'order' in data and data['order'].lower() == 'asc':
         query += ' FROM PostHierarchy ph LEFT JOIN Post p FORCE INDEX (PRIMARY) ON ph.post = p.id '
     else:
-        query += ' FROM Post p '
+        query += ' FROM Post p FORCE INDEX (' + clause.keys()[0] + '_date) '
         if user or forum or thread:
             query += ' LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
             query += 'id ' if join == 'thread' else 'short_name '
