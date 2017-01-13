@@ -137,8 +137,7 @@ def list_users_where_email(table, email, data, clause):
              FROM User u WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
     for i, field in enumerate(clause):
         query += 't.' + field + ' = ' + '%s'
-        query += ' AND ' if i < len(clause)-1 else ''
-        query += ') '
+        query += ' AND ' if i < len(clause)-1 else ') '
     if 'since_id' in data.keys():
         if data['since_id'].lstrip('-').isdigit():
             query += ' AND u.id >= %(since_id)s' % data
