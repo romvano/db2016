@@ -6,7 +6,7 @@ common = Blueprint('common', __name__)
 
 tables = [
     'Follower',
-    'Followee',
+#    'Followee',
     'Subscription',
     'PostHierarchy',
     'Post',
@@ -131,7 +131,7 @@ def minimize_response(response, default_fields, main_field, additional_fields=[]
 
 def list_users_where_email(table, email, data, clause):
     query = 'SELECT u.' + ', u.'.join(user_fields) + ', \
-             (SELECT GROUP_CONCAT( fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT( fr.name) FROM Follower fr WHERE fr.followee = u.email), \
              (SELECT GROUP_CONCAT( fr.followee) FROM Follower fr WHERE fr.name = u.email), \
              (SELECT GROUP_CONCAT( s.thread) FROM Subscription s WHERE s.name = u.email) \
              FROM User u WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
@@ -208,7 +208,7 @@ def list_threads_where(data, clause):
         query += ', f.' + ', f.'.join(forum_fields)
     if user:
         query += ', u.' + ', u.'.join(user_fields) + ', \
-             (SELECT GROUP_CONCAT(fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT(fr.name) FROM Follower fr WHERE fr.followee = u.email), \
              (SELECT GROUP_CONCAT(fr.followee) FROM Follower fr WHERE fr.name = u.email), \
              (SELECT GROUP_CONCAT(s.thread) FROM Subscription s WHERE s.name = u.email) '
     query += ' FROM Thread t '
@@ -277,7 +277,7 @@ def list_posts_where(data, clause, sort='flat'):
         query += ', t.' + ', t.'.join(thread_fields)
     if user:
         query += ', u.' + ', u.'.join(user_fields) + ', \
-             (SELECT GROUP_CONCAT(fe.follower) FROM Followee fe WHERE fe.name = u.email), \
+             (SELECT GROUP_CONCAT(fr.name) FROM Follower fr WHERE fr.followee = u.email), \
              (SELECT GROUP_CONCAT(fr.followee) FROM Follower fr WHERE fr.name = u.email), \
              (SELECT GROUP_CONCAT(s.thread) FROM Subscription s WHERE s.name = u.email) '
     if sort != 'flat' and 'order' in data and data['order'].lower() == 'asc':

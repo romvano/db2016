@@ -10,7 +10,7 @@ def select_from_user_where(key, value):
     return select_from_where('User', user_fields, key, value)
 
 def select_followers(user):
-    query = 'SELECT follower FROM Followee WHERE name = "' + user + '";'
+    query = 'SELECT name FROM Follower WHERE followee = "' + user + '";'
     return list(chain.from_iterable(select(query)))
 
 def select_followees(user):
@@ -65,10 +65,10 @@ def set_following():
     try:
         if action == 'follow':
             g.cursor.execute('INSERT INTO Follower(name, followee) VALUES ("%s", "%s"); ' % (follower, followee))
-            g.cursor.execute('INSERT INTO Followee(name, follower) VALUES ("%s", "%s"); ' % (followee, follower))
+#            g.cursor.execute('INSERT INTO Followee(name, follower) VALUES ("%s", "%s"); ' % (followee, follower))
         elif action == 'unfollow':
             g.cursor.execute('DELETE FROM Follower WHERE name = "%s" AND followee = "%s";' % (follower, followee))
-            g.cursor.execute('DELETE FROM Followee WHERE name = "%s" AND follower = "%s";' % (followee, follower))
+#            g.cursor.execute('DELETE FROM Followee WHERE name = "%s" AND follower = "%s";' % (followee, follower))
     except db.IntegrityError:
         g.connection.rollback()
     else:
@@ -96,8 +96,10 @@ def list_followers():
     data = get_get_data(request)
     if not 'user' in data.keys():
         return jsonify({ 'code': 2, 'response': 'json error' })
-    (table, email) = ('Followee', 'follower') if action == 'listFollowers' else ('Follower', 'followee')
-    return list_users_where_email(table, email, data, { 'name': data['user'] })
+    if action == 'listFollowers':
+        return list_users_where_email('Follower', 'name', data, { 'followee': data['user'] })
+    else:
+        return list_users_where_email('Follower', 'followee', data, { 'name': data['user'] })
 
 @User.route('listPosts/', methods=['GET'])
 def list_posts():
