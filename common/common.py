@@ -132,7 +132,7 @@ def minimize_response(response, default_fields, main_field, additional_fields=[]
 def list_users_where_email(table, email, data, clause):
     query = 'SELECT u.' + ', u.'.join(user_fields) + ', \
              (SELECT GROUP_CONCAT( fr.name) FROM Follower fr FORCE INDEX (followee) WHERE fr.followee = u.email), \
-             (SELECT GROUP_CONCAT( fr.followee) FROM Follower FORCE INDEX (PRIMARY) fr WHERE fr.name = u.email), \
+             (SELECT GROUP_CONCAT( fr.followee) FROM Follower fr FORCE INDEX (PRIMARY) WHERE fr.name = u.email), \
              (SELECT GROUP_CONCAT( s.thread) FROM Subscription s FORCE INDEX (PRIMARY) WHERE s.name = u.email) \
              FROM User u FORCE INDEX (email_unique) WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
     for i, field in enumerate(clause):
