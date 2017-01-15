@@ -133,11 +133,14 @@ def list_users_where_email(table, email, data, clause):
     query = 'SELECT u.' + ', u.'.join(user_fields) + ', \
              (SELECT GROUP_CONCAT( fr.name) FROM Follower fr FORCE INDEX (followee) WHERE fr.followee = u.email), \
              (SELECT GROUP_CONCAT( fr.followee) FROM Follower fr FORCE INDEX (PRIMARY) WHERE fr.name = u.email), \
-             (SELECT GROUP_CONCAT( s.thread) FROM Subscription s FORCE INDEX (PRIMARY) WHERE s.name = u.email) \
-             FROM User u WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
+             (SELECT GROUP_CONCAT( s.thread) FROM Subscription s FORCE INDEX (PRIMARY) WHERE s.name = u.email)'
+    if table == 'Follower':
+        query += ' FROM User u INNER JOIN Follower t ON u.email = t.' + email + ' AND '
+    else:
+        query += ' FROM User u WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
     for i, field in enumerate(clause):
         query += 't.' + field + ' = ' + '%s'
-        query += ' AND ' if i < len(clause)-1 else ') '
+        query += ' AND ' if i < len(clause)-1 else ('' if table == 'Follower' else ') ')
     if 'since_id' in data.keys():
         if data['since_id'].lstrip('-').isdigit():
             query += ' AND u.id >= %(since_id)s' % data
