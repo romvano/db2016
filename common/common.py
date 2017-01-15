@@ -190,8 +190,9 @@ def status():
     try:
         response = {}
         for table in tables:
-            g.cursor.execute('SELECT COUNT(*) FROM %s' % table)
-            response[table] = g.cursor.fetchone()[0]
+            if table != 'PostHierarchy':
+                g.cursor.execute('SELECT COUNT(*) FROM %s' % table)
+                response[table] = g.cursor.fetchone()[0]
         return jsonify({ 'code': 0, 'response': response })
     except:
         g.connection.rollback()
