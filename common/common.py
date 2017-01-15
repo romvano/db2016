@@ -328,8 +328,7 @@ def list_posts_where(data, clause, sort='flat'):
         query += ' ORDER BY ph.parent ' + order
         query += ', ph.address ASC '
     else: # flat
-        if order.lower() == 'desc':
-            query += ' ORDER BY p.date ' + order
+        query += ' ORDER BY p.date ' + order
     if 'limit' in data.keys():
         if not (data['limit'].lstrip('-').isdigit() and int(data['limit']) >= 0):
             return jsonify({ 'code': 2, 'response': 'json error in limit' })
