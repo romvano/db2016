@@ -134,7 +134,7 @@ def list_users_where_email(table, email, data, clause):
              (SELECT GROUP_CONCAT( fr.name) FROM Follower fr FORCE INDEX (followee) WHERE fr.followee = u.email), \
              (SELECT GROUP_CONCAT( fr.followee) FROM Follower fr FORCE INDEX (PRIMARY) WHERE fr.name = u.email), \
              (SELECT GROUP_CONCAT( s.thread) FROM Subscription s FORCE INDEX (PRIMARY) WHERE s.name = u.email) \
-             FROM User u FORCE INDEX (email_unique) WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
+             FROM User u WHERE email IN (SELECT ' + email + ' FROM ' + table + ' t WHERE '
     for i, field in enumerate(clause):
         query += 't.' + field + ' = ' + '%s'
         query += ' AND ' if i < len(clause)-1 else ') '
