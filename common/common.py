@@ -18,6 +18,8 @@ tables = [
 user_fields = ['id', 'username', 'about', 'name', 'email', 'isAnonymous']
 post_fields_to_insert = ['date', 'forum', 'isApproved', 'isDeleted', 'isEdited', 'isHighlighted', 'isSpam', 'message', 'parent', 'thread', 'user']
 post_fields = ['id'] + post_fields_to_insert + ['likes', 'dislikes', 'points']
+post_fields_select = 'p.' + ', p.'.join(post_fields[:-1]) + ', (p.likes - p.dislikes) as points'
+post_fields_select_nop = ['id'] + post_fields_to_insert + ['likes', 'dislikes', '(likes - dislikes) as points']
 thread_fields_to_insert = ['forum', 'title', 'isClosed', 'user', 'date', 'message', 'slug', 'isDeleted']
 thread_fields = ['id'] + thread_fields_to_insert + ['dislikes', 'likes', 'points', 'posts']
 forum_fields_to_insert = ['name', 'short_name', 'user']
@@ -37,11 +39,12 @@ def select(query, params=()):
 
 def select_from_where(table, what='', key=None, value=None):
     query = 'SELECT ' + ', '.join(what) + ' FROM ' + table + ' WHERE ' + key + '= %s;'
+    print '\n\n', what, '\n\n'
     params = (value,)
     selected = select(query, params)
     if not selected:
         return None
-    result = dict(zip(what, selected[0]))
+    result = dict(zip(what if what != post_fields_select_nop else post_fields, selected[0]))
     if 'date' in result:
         result['date'] = result['date'].strftime('%Y-%m-%d %H:%M:%S')
     return result
@@ -270,7 +273,7 @@ def list_threads_where(data, clause):
         return jsonify({ 'code': 0, 'response': response })
 
 def list_posts_where(data, clause, sort='flat'):
-    query = 'SELECT p.' + ', p.'.join(post_fields)
+    query = 'SELECT ' + post_fields_select
     join = 'thread' if 'thread' in data else 'forum'
     forum = 'forum' in data['related']
     thread = 'thread' in data['related']

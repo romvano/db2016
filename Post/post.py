@@ -10,7 +10,7 @@ from Thread.thread import Thread as t, select_from_thread_where
 Post = Blueprint('post', __name__)
 
 def select_from_post_where(key, value):
-    return select_from_where('Post', post_fields, key, value)
+    return select_from_where('Post', post_fields_select_nop, key, value)
 
 def add_to_hierarchy(id, parent=0):
     if parent != 0:
@@ -40,8 +40,7 @@ def create_post():
     data['isEdited'] = data.get('isEdited', False)
     data['isSpam'] = data.get('isSpam', False)
     data['isDeleted'] = data.get('isDeleted', False)
-    data['likes'] = data['points'] = 0
-    response = create('Post', data, post_fields, 'message', data['message'])
+    response = create('Post', data, [post_fields_select_nop], 'message', data['message'])
     if response['code'] == 0 and not data['isDeleted']:
         id = g.cursor.lastrowid
         thread_response = update('Thread', { 'posts': 'Thread.posts + 1' }, { 'id': data['thread'] }, lambda: ({ 'code': 0 }) )
@@ -128,7 +127,7 @@ def post_vote():
     likes = 'likes' if data['vote'] == 1 else 'dislikes'
     return jsonify(update(
         'Post',
-        { likes: "Post."+likes+" + 1", "points": "Post.points + "+str(data['vote']) },
+        { likes: "Post."+likes+" + 1" },
         { 'id': data['post'] },
         lambda: (select_from_post_where('id', data['post']))
     ))
