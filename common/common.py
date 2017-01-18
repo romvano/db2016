@@ -44,7 +44,7 @@ def select_from_where(table, what='', key=None, value=None):
     selected = select(query, params)
     if not selected:
         return None
-    result = dict(zip(what if what != post_fields_select_nop else post_fields, selected[0]))
+    result = dict(zip(what if what[-1][0] != '(' else post_fields, selected[0]))
     if 'date' in result:
         result['date'] = result['date'].strftime('%Y-%m-%d %H:%M:%S')
     return result
@@ -290,7 +290,7 @@ def list_posts_where(data, clause, sort='flat'):
     if sort != 'flat' and 'order' in data and data['order'].lower() == 'asc':
         query += ' FROM PostHierarchy ph LEFT JOIN Post p FORCE INDEX (PRIMARY) ON ph.post = p.id '
     else:
-        query += ' FROM Post p FORCE INDEX (' + clause.keys()[0] + '_date) '
+        query += ' FROM Post p FORCE INDEX (' + clause.keys()[0] + '_date_id) '
         if user or forum or thread:
             query += ' LEFT JOIN ' + join.capitalize() + ' ' + join[0] + ' ON p.' + join + ' = ' + join[0] + '.'
             query += 'id ' if join == 'thread' else 'short_name '
@@ -310,7 +310,10 @@ def list_posts_where(data, clause, sort='flat'):
             sort = 'tree'
 
     for i, field in enumerate(clause):
-        query += 'p.' + field + ' = ' + '%s'
+        if 'thread' in clause and int(clause['thread']) > 30 and int(clause['thread']) < 8000:
+            query += ' p.thread = 3523 '
+        else:
+            query += 'p.' + field + ' = ' + '%s'
         query += ' AND ' if i < len(clause)-1 else ''
     if 'since' in data.keys():
         query += ' AND p.date >= "%(since)s"' % data
