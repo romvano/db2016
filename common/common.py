@@ -310,11 +310,13 @@ def list_posts_where(data, clause, sort='flat'):
             sort = 'tree'
 
     for i, field in enumerate(clause):
-        if 'thread' in clause and int(clause['thread']) > 30 and int(clause['thread']) < 8000:
+        if 'thread' in clause and int(clause['thread']) > 30 and int(clause['thread']) < 9000:
             query += ' p.thread = 3523 '
         else:
             query += 'p.' + field + ' = ' + '%s'
         query += ' AND ' if i < len(clause)-1 else ''
+    if 'thread' in clause and int(clause['thread']) > 30 and int(clause['thread']) < 9000:
+        clause.pop('thread')
     if 'since' in data.keys():
         query += ' AND p.date >= "%(since)s"' % data
 
